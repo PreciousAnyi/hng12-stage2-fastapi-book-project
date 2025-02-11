@@ -3,30 +3,40 @@ name: Deployment Pipeline
 on:
   push:
     branches:
-      - main 
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Setup SSH Key and SSH Agent
+      - name: Debug SSH Setup
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.GCP_SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          eval $(ssh-agent -s)
-          ssh-add ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.GCP_VM_IP }} >> ~/.ssh/known_hosts
+          echo "${{ secrets.GCP_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ls -la ~/.ssh/deploy_key
+          echo "Key file created and permissions set"
 
-      - name: Deploy to GCP
-        run: |
-          ssh -o StrictHostKeyChecking=no jkpresh@${{ secrets.GCP_VM_IP }} << 'EOF'
-            cd hng12-stage2-fastapi-book-project
-            git pull origin main
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.GCP_VM_IP }}
+          username: ${{ secrets.GCP_VM_USER }}
+          key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
+          script: |
+            echo "Current user: $(whoami)"
+            echo "Current directory: $(pwd)"
+            
+            cd fastapi-book-project
+            git pull
+            
+            # Set up virtual environment if it doesn't exist
+            if [ ! -d "venv" ]; then
+              python3 -m venv venv
+            fi
+            
             source venv/bin/activate
             pip install -r requirements.txt
-            systemctl restart fastapi
-          EOF
+            
+            # Restart FastAPI service
+            sudo systemctl restart fastapi

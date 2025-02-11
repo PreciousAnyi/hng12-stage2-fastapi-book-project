@@ -30,3 +30,4 @@ jobs:
       - name: Fail if Tests Fail
         if: failure()
         run: exit 1
+
