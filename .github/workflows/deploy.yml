@@ -27,7 +27,7 @@ jobs:
             echo "Current user: $(whoami)"
             echo "Current directory: $(pwd)"
             
-            cd fastapi-book-project
+            cd hng12-stage2-fastapi-book-project
             git pull
             
             # Set up virtual environment if it doesn't exist
