@@ -43,6 +43,11 @@ fastapi-book-project/
 - Pydantic
 - pytest
 - uvicorn
+- Google Cloud Platform (GCP) (VM Instance for deployment)
+- NGINX (Reverse Proxy)
+- Systemd (Process management)
+- GitHub Actions (CI/CD automation)
+- Python Virtual Environment (venv)
 
 ## Installation
 
@@ -128,6 +133,116 @@ The API includes proper error handling for:
 - Invalid book IDs
 - Invalid genre types
 - Malformed requests
+
+## Deployment
+This project is deployed on a **Google Cloud Platform (GCP) VM Instance** with **NGINX** as a reverse proxy.
+
+### 1. Provision a Server on GCP
+- Create a new **Compute Engine VM instance** on Google Cloud.
+- Select an appropriate machine type (e.g., `e2-medium (2 vCPU, 4GB RAM)`).
+- Allow HTTP and HTTPS traffic in firewall settings.
+- Connect to your instance via SSH.
+
+### 2. Install Virtual Environment & Dependencies
+SSH into your server:
+```sh
+ssh -i ~/.ssh/id_rsa_gcp your-user@your-instance-ip
+```
+
+Once inside, set up the environment:
+```sh
+sudo apt update && sudo apt install -y python3-venv
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 3. Set Up Systemd for FastAPI
+Create a systemd service file:
+```sh
+sudo nano /etc/systemd/system/fastapi.service
+```
+
+Add the following configuration:
+```
+[Unit]
+Description=FastAPI Service
+After=network.target
+
+[Service]
+User=your-user
+Group=your-user
+WorkingDirectory=/home/your-user/fastapi-book-project
+ExecStart=/home/your-user/fastapi-book-project/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+Save and exit, then enable the service:
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable fastapi
+sudo systemctl start fastapi
+sudo systemctl status fastapi
+```
+
+### 4. Configure NGINX as a Reverse Proxy
+Install NGINX:
+```sh
+sudo apt install -y nginx
+```
+
+Create a new NGINX configuration:
+```sh
+sudo nano /etc/nginx/sites-available/fastapi
+```
+
+Add this:
+```
+server {
+    listen 80;
+    server_name your-instance-ip;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```
+Save and exit.
+
+Enable the configuration:
+```sh
+sudo ln -s /etc/nginx/sites-available/fastapi /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+### 5. Configure SSH Key for Deployment
+- Generate an SSH key on your local machine:
+```sh
+ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa_gcp
+```
+- Copy the **public key** to your server:
+```sh
+cat ~/.ssh/id_rsa_gcp.pub | ssh your-user@your-instance-ip "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys"
+```
+
+Now, you can securely SSH into your server and automate deployment.
+
+## CI/CD Pipeline
+This project includes a **GitHub Actions workflow** for automatic testing and deployment:
+
+### 1. Continuous Integration (CI)
+- Runs **pytest** when a pull request is made.
+- Ensures all tests pass before merging.
+
+### 2. Continuous Deployment (CD)
+- Automatically deploys to the **GCP VM Instance** on merging to `main`.
+- Uses **SSH and Git Pull** to update the code and restart the service.
 
 ## Contributing
 
